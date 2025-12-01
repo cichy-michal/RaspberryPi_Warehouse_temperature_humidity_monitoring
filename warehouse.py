@@ -31,7 +31,9 @@ TEMP_MAX_PHYSICAL = 85.0
 HUM_MIN_PHYSICAL  = 0.0
 HUM_MAX_PHYSICAL  = 100.0
 
-def determine_state(temperature: float, humidity: float) -> str:
+previous_state = None
+
+def determine_state(temperature: float, humidity: float):
 
     if (
         temperature is None
@@ -86,19 +88,17 @@ try:
 
             point = influxdb_client.Point('weather').field('temperature', temperature).field('humidity', humidity)
 
+            current_state = determine_state(temperature, humidity)
+
             write_api.write(bucket = bucket, org = org, record = point)
             
-            if temperature > TEMP_WARNING and temperature < TEMP_ALARM:
-                send_thingspeak_alert("ALERT: Temperatura blisko progu alarmowego", f"Temperatura: {temperature:.2f} °C")
-            
-            if temperature > TEMP_ALARM:
-                send_thingspeak_alert("ALERT: Temperatura przekroczyla prog alarmowy", f"Temperatura: {temperature:.2f} °C")
+            if current_state != previous_state:
+                if current_state == "warning":
+                    send_thingspeak_alert("ALERT: System blisko progu alarmowego", f"Temperatura: {temperature:.2f} °C, Wilgotność powietrza: {humidity:.2f} %")
                 
-            if humidity > HUM_WARNING and humidity < HUM_ALARM:
-                send_thingspeak_alert("ALERT: Wilgotnosc powietrza blisko progu alarmowego", f"Wilgotnosc powietrza: {humidity:.2f} %")
-            
-            if humidity > HUM_ALARM:
-                send_thingspeak_alert("ALERT: Wilgotnosc powietrza przekroczyla prog alarmowy", f"Wilgotnosc powietrza: {humidity:.2f} %")
+                if current_state == "alarm":
+                    send_thingspeak_alert("ALERT: System przekroczył próg alarmowy", f"Temperatura: {temperature:.2f} °C, Wilgotność powietrza: {humidity:.2f} %")
+            previous_state = current_state
 
         except Exception as e:
                 logging.error(f"Błąd odczytu/zapisu: {e}")
